@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { isAxiosError } from "axios";
-import { ArrowRight, CalendarDays, LoaderCircle, LogOut, School } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, LoaderCircle, LogOut, School } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Turnos } from "@/components/Turnos";
 import { obterPerfil, supabase, type Perfil } from "@/lib/services";
 
 const papeis = { ADMIN: "Administrador", GESTOR: "Gestor", VISUALIZADOR: "Visualizador" };
@@ -27,11 +28,11 @@ function Workspace({ client }: { client: SupabaseClient }) {
     return () => subscription.unsubscribe();
   }, [client]);
 
+  if (session) return <Profile key={session.user.id} client={client} session={session} />;
+
   return (
     <Layout>
-      {session === undefined ? <Loading>Verificando sessão…</Loading>
-        : session ? <Profile key={session.user.id} client={client} session={session} />
-        : <Login client={client} />}
+      {session === undefined ? <Loading>Verificando sessão…</Loading> : <Login client={client} />}
     </Layout>
   );
 }
@@ -91,7 +92,9 @@ function Profile({ client, session }: { client: SupabaseClient; session: Session
   const [attempt, setAttempt] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [signOutError, setSignOutError] = useState("");
+  const [escolaId, setEscolaId] = useState("");
   const token = session.access_token;
+  const selecionada = profile?.escolas.find(({ escola }) => escola.id === escolaId);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -121,8 +124,36 @@ function Profile({ client, session }: { client: SupabaseClient; session: Session
     }
   }
 
+  const botaoSair = (
+    <Button variant="outline" disabled={leaving} onClick={sair}>
+      <LogOut aria-hidden="true" /> {leaving ? "Saindo…" : "Sair"}
+    </Button>
+  );
+
+  if (selecionada && !error) return (
+    <main className="min-h-svh">
+      <header className="border-b border-input bg-background">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-8">
+          <Button variant="outline" onClick={() => setEscolaId("")}><ArrowLeft aria-hidden="true" /> Minhas escolas</Button>
+          {botaoSair}
+        </div>
+      </header>
+      <div className="mx-auto max-w-5xl px-4 py-7 sm:px-8 sm:py-10">
+        {signOutError && <div className="mb-4"><Feedback>{signOutError}</Feedback></div>}
+        <div className="mb-7 flex items-start gap-3">
+          <School className="mt-1 size-6 shrink-0 text-primary" aria-hidden="true" />
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{selecionada.escola.nome}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{papeis[selecionada.papel]}</p>
+          </div>
+        </div>
+        <Turnos key={escolaId} escolaId={escolaId} token={token} podeEditar={selecionada.papel !== "VISUALIZADOR"} />
+      </div>
+    </main>
+  );
+
   return (
-    <>
+    <Layout>
       <h1>Minhas escolas</h1>
       <p className="mt-3 break-words text-muted-foreground">{profile?.nome || session.user.email || "Conta autenticada"}</p>
       <div className="mt-7">
@@ -136,12 +167,15 @@ function Profile({ client, session }: { client: SupabaseClient; session: Session
           profile.escolas.length ? (
             <ul className="grid max-h-84 gap-3 overflow-y-auto pr-1">
               {profile.escolas.map(({ escola, papel }) => (
-                <li key={escola.id} className="flex items-center gap-3 rounded-xl border border-input p-4">
-                  <School className="size-5 shrink-0 text-primary" aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="break-words font-semibold">{escola.nome}</p>
-                    <p className="text-sm text-muted-foreground">{papeis[papel]}</p>
-                  </div>
+                <li key={escola.id}>
+                  <Button variant="outline" className="w-full justify-start rounded-xl p-4 text-left" onClick={() => setEscolaId(escola.id)}>
+                    <School className="shrink-0 text-primary" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words">{escola.nome}</span>
+                      <span className="block text-sm font-normal text-muted-foreground">{papeis[papel]}</span>
+                    </span>
+                    <ArrowRight className="shrink-0 text-primary" aria-hidden="true" />
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -151,10 +185,8 @@ function Profile({ client, session }: { client: SupabaseClient; session: Session
         ) : <Loading>Carregando suas escolas…</Loading>}
       </div>
       {signOutError && <div className="mt-4"><Feedback>{signOutError}</Feedback></div>}
-      <Button variant="outline" className="mt-6" disabled={leaving} onClick={sair}>
-        <LogOut aria-hidden="true" /> {leaving ? "Saindo…" : "Sair"}
-      </Button>
-    </>
+      <div className="mt-6">{botaoSair}</div>
+    </Layout>
   );
 }
 
